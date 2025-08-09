@@ -1,0 +1,42 @@
+{
+  "name": "slack-ai-agent-service",
+  "version": "1.0.0",
+  "description": "A Slack bot that processes user mentions, analyzes context with AI, and triggers Jenkins jobs via MCP",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest",
+    "@slack/bolt": "^3.17.1",
+    "dotenv": "^16.4.5",
+    "joi": "^17.12.2",
+    "openai": "^4.28.4",
+    "redis": "^4.6.13",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.11.19",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.3",
+    "task-master-ai": "^0.23.0",
+    "ts-jest": "^29.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "slack",
+    "bot",
+    "ai",
+    "jenkins",
+    "mcp"
+  ],
+  "author": "",
+  "license": "MIT"
+}

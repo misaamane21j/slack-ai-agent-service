@@ -1,0 +1,197 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Environment Variable Validation",
+        "description": "Implement environment variable validation using Joi to replace non-null assertions with proper validation",
+        "details": "Create a comprehensive Joi schema in src/config/environment.ts that validates all required environment variables (SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, JENKINS_URL, JENKINS_USERNAME, JENKINS_API_TOKEN, ANTHROPIC_API_KEY, etc.). Replace current non-null assertions with proper validation that throws descriptive errors. Add TypeScript interfaces for validated configuration. Include validation for URL formats, token patterns, and required vs optional variables.",
+        "testStrategy": "Unit tests for schema validation with valid and invalid environment configurations. Test error messages for missing variables. Integration tests ensuring application fails gracefully with clear messages when misconfigured.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create TypeScript interfaces for environment configuration",
+            "description": "Define TypeScript interfaces that represent the validated environment configuration structure, including all required and optional environment variables.",
+            "dependencies": [],
+            "details": "Create a file `src/config/interfaces.ts` that defines TypeScript interfaces for the environment configuration. Include interfaces for all configuration categories (Slack, Jenkins, AI services, etc.). Define proper types for each variable (string, number, boolean) and document each field with JSDoc comments. Create a main `EnvironmentConfig` interface that combines all category interfaces.",
+            "status": "done",
+            "testStrategy": "Verify interface completeness by using it with sample configuration objects. Ensure TypeScript compiler catches missing or incorrect property types."
+          },
+          {
+            "id": 2,
+            "title": "Implement Joi schema for environment variables",
+            "description": "Create a comprehensive Joi validation schema that defines validation rules for all environment variables.",
+            "dependencies": [],
+            "details": "In `src/config/environment.ts`, import Joi and create a validation schema that covers all environment variables. Define specific validation rules for each variable type: URL format validation for URLs (JENKINS_URL), token pattern validation for API keys, required vs optional flags. Group related variables into logical schema objects. Include descriptive error messages for validation failures.",
+            "status": "done",
+            "testStrategy": "Unit test the schema with various valid and invalid configurations to ensure validation rules work correctly. Test error messages for clarity and helpfulness."
+          },
+          {
+            "id": 3,
+            "title": "Create environment loading and validation function",
+            "description": "Implement a function that loads environment variables, validates them against the Joi schema, and returns a typed configuration object.",
+            "dependencies": [],
+            "details": "Create a `loadConfig()` function in `src/config/environment.ts` that reads environment variables using `process.env`, validates them using the Joi schema, and returns a properly typed configuration object. Handle validation errors by throwing descriptive exceptions that include which variables failed validation and why. Implement sensible defaults for optional variables. Return the validated configuration object that matches the TypeScript interfaces.",
+            "status": "done",
+            "testStrategy": "Unit test the function with various environment configurations, including missing required variables, malformed values, and valid configurations. Test error handling and default values."
+          },
+          {
+            "id": 4,
+            "title": "Replace non-null assertions with validated configuration",
+            "description": "Update all code that currently uses non-null assertions (!) on environment variables to use the validated configuration object instead.",
+            "dependencies": [],
+            "details": "Search the codebase for all instances of `process.env` access and non-null assertions on environment variables. Replace these with references to the validated configuration object. Update imports to include the new configuration. Ensure type safety throughout the application by using the typed configuration object. This includes updating services that depend on environment variables like Slack, Jenkins, and AI services.",
+            "status": "done",
+            "testStrategy": "Integration tests to verify the application works correctly with the new configuration approach. Test application startup with valid and invalid configurations to ensure proper error handling."
+          },
+          {
+            "id": 5,
+            "title": "Add application startup validation and error reporting",
+            "description": "Implement validation at application startup that provides clear error messages when environment variables are missing or invalid.",
+            "dependencies": [],
+            "details": "In the application entry point (e.g., `src/index.ts`), add a try-catch block around the configuration loading. When validation fails, provide a user-friendly error message that clearly indicates which environment variables are missing or invalid and how to fix the issues. Include instructions for setting up environment variables in different environments. Implement a graceful shutdown process when configuration is invalid. Add logging of configuration issues without exposing sensitive values.",
+            "status": "done",
+            "testStrategy": "Test application startup with various invalid configurations to ensure helpful error messages are displayed. Verify the application fails gracefully with clear instructions when misconfigured."
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "AI Response Validation",
+        "description": "Add JSON parsing validation for AI responses to handle malformed responses gracefully",
+        "details": "Create Joi schema for AIResponse interface validation in src/services/ai-processor.ts. Add try-catch blocks around JSON.parse() calls with proper error handling. Implement fallback behavior for malformed responses (retry with simplified prompt, return default safe response). Add response structure validation before processing. Include logging for failed parse attempts.",
+        "testStrategy": "Unit tests with malformed JSON responses, partial JSON, and valid responses. Test fallback behavior and error handling. Mock AI service to return various response formats and verify graceful handling.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Input Sanitization for Jenkins Parameters",
+        "description": "Add input sanitization and validation for Jenkins job parameters to prevent injection attacks",
+        "details": "Implement parameter sanitization in src/services/slack-bot.ts before sending to Jenkins. Create whitelist of allowed parameter names and value patterns. Sanitize string inputs using libraries like validator.js or custom regex patterns. Add type validation for parameter values. Implement parameter encoding for safe transmission. Add logging for sanitization events.",
+        "testStrategy": "Unit tests with malicious input patterns, SQL injection attempts, command injection attempts. Test parameter whitelisting and value validation. Integration tests ensuring Jenkins receives only sanitized parameters.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Security Improvements for Process Spawning",
+        "description": "Secure the MCP client process spawning with validation and security constraints",
+        "details": "Add path validation for MCP server executable in src/services/mcp-client.ts. Implement process isolation using spawn options (detached: false, shell: false). Add process monitoring with timeout mechanisms. Implement proper cleanup of child processes on application shutdown. Add resource limits and security constraints. Validate command arguments before spawning.",
+        "testStrategy": "Unit tests for path validation and process spawning security. Integration tests for process cleanup and timeout handling. Test malicious path inputs and command injection attempts. Monitor resource usage during process execution.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Thread Context Implementation",
+        "description": "Complete the getThreadContext method to fetch conversation history using Slack Web API",
+        "details": "Implement getThreadContext method in src/services/slack-bot.ts using Slack Web API conversations.replies endpoint. Add pagination handling for long threads. Implement rate limiting compliance with Slack API limits. Filter messages to relevant context (last N messages, time window). Add caching mechanism for recent thread contexts. Handle thread vs channel message distinctions.",
+        "testStrategy": "Unit tests for API calls and pagination. Integration tests with real Slack threads. Test rate limiting behavior and caching mechanisms. Mock Slack API responses for various thread scenarios.",
+        "priority": "high",
+        "dependencies": [
+          2,
+          3
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Enhanced Error Handling",
+        "description": "Add comprehensive error handling throughout the application with user-friendly messages",
+        "details": "Create custom error classes for different error types (SlackAPIError, JenkinsError, AIProcessingError). Implement error boundary patterns with proper logging. Add user-friendly error messages for Slack responses. Implement retry mechanisms for transient failures. Add error aggregation and monitoring. Create error recovery strategies for each service.",
+        "testStrategy": "Unit tests for each error type and handling strategy. Integration tests for error scenarios across services. Test user message formatting and retry mechanisms. Verify error logging without sensitive data exposure.",
+        "priority": "medium",
+        "dependencies": [
+          1,
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Rate Limiting & Abuse Protection",
+        "description": "Implement rate limiting and abuse protection to prevent spam and abuse of the bot",
+        "details": "Implement per-user rate limiting using Redis or in-memory store. Add cooldown periods for Jenkins job triggers per user/job combination. Create sliding window rate limiting algorithm. Add suspicious activity detection (rapid requests, unusual patterns). Implement progressive penalties for abuse. Add whitelist/blacklist functionality for users. Log rate limiting events for monitoring.",
+        "testStrategy": "Unit tests for rate limiting algorithms and cooldown logic. Integration tests with multiple concurrent users. Test abuse detection and penalty systems. Performance tests under high request volume.",
+        "priority": "medium",
+        "dependencies": [
+          5,
+          6
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Test Implementation",
+        "description": "Create comprehensive test suite with unit and integration tests",
+        "details": "Set up Jest testing framework with TypeScript support. Create unit tests for all service classes (SlackBotService, AIProcessor, MCPClient, JenkinsService). Implement integration tests for Slack webhook handling and Jenkins job triggering. Add mock implementations for external dependencies (Slack API, Jenkins API, AI services). Create test utilities for common scenarios. Set up code coverage reporting with >80% target.",
+        "testStrategy": "Test the tests themselves with mutation testing. Verify mock accuracy against real API responses. Set up CI/CD pipeline integration for automated testing. Create performance benchmarks and regression tests.",
+        "priority": "medium",
+        "dependencies": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Additional Security Hardening",
+        "description": "Implement additional security measures including request verification and secure logging",
+        "details": "Implement Slack request signing verification using HMAC-SHA256. Add secure logging practices (no sensitive data, structured logging). Implement CORS headers and security middleware. Add input validation middleware for all endpoints. Implement secure secret management using environment variables or secret management services. Add security headers (helmet.js). Implement request size limits and timeout controls.",
+        "testStrategy": "Security testing with invalid signatures, oversized requests, and malicious headers. Test logging output for sensitive data leaks. Verify CORS and security header implementation. Penetration testing for common web vulnerabilities.",
+        "priority": "medium",
+        "dependencies": [
+          3,
+          4,
+          6
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Documentation & Monitoring",
+        "description": "Add comprehensive documentation and monitoring with health checks and metrics",
+        "details": "Create comprehensive API documentation using OpenAPI/Swagger. Add health check endpoints for application status monitoring. Implement metrics collection (request counts, response times, error rates). Create deployment guides and operational runbooks. Add inline code documentation and README updates. Implement logging aggregation and alerting. Create monitoring dashboards for key metrics.",
+        "testStrategy": "Verify documentation accuracy against implementation. Test health check endpoints under various failure scenarios. Validate metrics collection and aggregation. Test deployment procedures in staging environment.",
+        "priority": "low",
+        "dependencies": [
+          7,
+          8,
+          9
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-08-05T12:15:10.097Z",
+      "updated": "2025-08-09T07:19:42.775Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
