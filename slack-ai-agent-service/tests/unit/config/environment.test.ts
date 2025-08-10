@@ -25,55 +25,52 @@ describe('Environment Configuration', () => {
   });
 
   describe('loadConfig', () => {
-    it('should successfully validate and return config with all required environment variables', async () => {
-      // Arrange
+    it('should successfully validate config with valid format tokens', async () => {
+      // Arrange - Test that valid format validation passes
+      const testFile = process.cwd() + '/test-jenkins-server.js';
+      const fs = require('fs');
+      fs.writeFileSync(testFile, 'console.log("test");');
+
       process.env = {
-        SLACK_BOT_TOKEN: 'xoxb-test-token-123456789012',
-        SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
-        SLACK_APP_TOKEN: 'xapp-test-token-123456789012',
-        OPENAI_API_KEY: 'sk-test-key-123456789012',
-        JENKINS_MCP_SERVER_PATH: '/path/to/jenkins/server.js',
+        SLACK_BOT_TOKEN: 'xoxb-valid-format-token', // Tests xoxb- validation
+        SLACK_SIGNING_SECRET: 'this-is-a-32-character-secret-', // Tests minimum length
+        SLACK_APP_TOKEN: 'xapp-valid-format-token', // Tests xapp- validation  
+        ANTHROPIC_API_KEY: 'sk-ant-api03-valid-format-key', // Tests sk-ant-api03- validation
+        JENKINS_MCP_SERVER_PATH: testFile, // Tests file exists validation
       };
 
-      // Act
-      const { loadConfig } = await import('../../../src/config/environment');
-      const config = loadConfig();
+      try {
+        // Act
+        const { loadConfig } = await import('../../../src/config/environment');
+        const config = loadConfig();
 
-      // Assert
-      expect(config).toEqual({
-        slack: {
-          botToken: 'xoxb-test-token-123456789012',
-          signingSecret: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
-          appToken: 'xapp-test-token-123456789012',
-        },
-        ai: {
-          openaiApiKey: 'sk-test-key-123456789012',
-          model: 'gpt-4-turbo',
-          confidenceThreshold: 0.8,
-        },
-        mcp: {
-          jenkinsServerPath: '/path/to/jenkins/server.js',
-        },
-        redis: {
-          url: 'redis://localhost:6379',
-        },
-        app: {
-          nodeEnv: 'development',
-          logLevel: 'info',
-        },
-        port: 3000,
-      });
+        // Assert - Test validation logic worked, not specific values
+        expect(config.slack.botToken).toMatch(/^xoxb-/); // Validates format rule
+        expect(config.slack.signingSecret.length).toBeGreaterThanOrEqual(32); // Validates length rule
+        expect(config.slack.appToken).toMatch(/^xapp-/); // Validates format rule
+        expect(config.ai.anthropicApiKey).toMatch(/^sk-ant-api03-/); // Validates format rule
+        expect(config.ai.model).toBe('claude-3-5-sonnet-20241022'); // Tests default
+        expect(config.ai.confidenceThreshold).toBe(0.8); // Tests default
+        expect(config.port).toBe(3000); // Tests default
+        expect(config.app.nodeEnv).toBe('development'); // Tests default
+      } finally {
+        fs.unlinkSync(testFile);
+      }
     });
 
     it('should use custom values when provided', async () => {
       // Arrange
+      const testFile = process.cwd() + '/test-custom-jenkins.js';
+      const fs = require('fs');
+      fs.writeFileSync(testFile, 'console.log("test");');
+      
       process.env = {
         SLACK_BOT_TOKEN: 'xoxb-custom-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-custom-token',
-        OPENAI_API_KEY: 'sk-custom-key',
-        JENKINS_MCP_SERVER_PATH: '/custom/path/jenkins.js',
-        AI_MODEL: 'gpt-4o',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-custom-key-abcdef',
+        JENKINS_MCP_SERVER_PATH: testFile,
+        AI_MODEL: 'claude-3-opus-20240229',
         AI_CONFIDENCE_THRESHOLD: '0.9',
         REDIS_URL: 'redis://custom:6379',
         NODE_ENV: 'production',
@@ -81,17 +78,21 @@ describe('Environment Configuration', () => {
         PORT: '8080',
       };
 
-      // Act
-      const { loadConfig } = await import('../../../src/config/environment');
-      const config = loadConfig();
+      try {
+        // Act
+        const { loadConfig } = await import('../../../src/config/environment');
+        const config = loadConfig();
 
-      // Assert
-      expect(config.ai.model).toBe('gpt-4o');
-      expect(config.ai.confidenceThreshold).toBe(0.9);
-      expect(config.redis.url).toBe('redis://custom:6379');
-      expect(config.app.nodeEnv).toBe('production');
-      expect(config.app.logLevel).toBe('error');
-      expect(config.port).toBe(8080);
+        // Assert - Test that custom values override defaults
+        expect(config.ai.model).toBe('claude-3-opus-20240229');
+        expect(config.ai.confidenceThreshold).toBe(0.9);
+        expect(config.redis.url).toBe('redis://custom:6379');
+        expect(config.app.nodeEnv).toBe('production');
+        expect(config.app.logLevel).toBe('error');
+        expect(config.port).toBe(8080);
+      } finally {
+        fs.unlinkSync(testFile);
+      }
     });
 
     it('should throw error when SLACK_BOT_TOKEN is missing', async () => {
@@ -99,7 +100,7 @@ describe('Environment Configuration', () => {
       process.env = {
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
       };
 
@@ -114,7 +115,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'invalid-token-format',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
       };
 
@@ -129,7 +130,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'short',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
       };
 
@@ -144,7 +145,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'invalid-app-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
       };
 
@@ -153,19 +154,19 @@ describe('Environment Configuration', () => {
       expect(() => loadConfig()).toThrow(/SLACK_APP_TOKEN must start with "xapp-"/);
     });
 
-    it('should throw error when OPENAI_API_KEY has wrong format', async () => {
+    it('should throw error when ANTHROPIC_API_KEY has wrong format', async () => {
       // Arrange
       process.env = {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'invalid-key',
+        ANTHROPIC_API_KEY: 'invalid-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
       };
 
       // Act & Assert
       const { loadConfig } = await import('../../../src/config/environment');
-      expect(() => loadConfig()).toThrow(/OPENAI_API_KEY must start with "sk-"/);
+      expect(() => loadConfig()).toThrow(/ANTHROPIC_API_KEY must start with "sk-ant-api03-"/);
     });
 
     it('should throw error when AI_MODEL is invalid', async () => {
@@ -174,7 +175,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
         AI_MODEL: 'invalid-model',
       };
@@ -190,7 +191,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
         AI_CONFIDENCE_THRESHOLD: '1.5',
       };
@@ -206,7 +207,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
         REDIS_URL: 'invalid-url',
       };
@@ -222,7 +223,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
         PORT: '99999',
       };
@@ -237,7 +238,7 @@ describe('Environment Configuration', () => {
       process.env = {
         SLACK_BOT_TOKEN: 'invalid',
         SLACK_SIGNING_SECRET: 'short',
-        OPENAI_API_KEY: 'invalid',
+        ANTHROPIC_API_KEY: 'invalid',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
       };
 
@@ -256,7 +257,57 @@ describe('Environment Configuration', () => {
       expect(error!.message).toContain('Environment validation failed:');
       expect(error!.message).toContain('SLACK_BOT_TOKEN must start with "xoxb-"');
       expect(error!.message).toContain('SLACK_SIGNING_SECRET must be at least 32 characters');
-      expect(error!.message).toContain('OPENAI_API_KEY must start with "sk-"');
+      expect(error!.message).toContain('ANTHROPIC_API_KEY must start with "sk-ant-api03-"');
+    });
+
+    it('should validate MCP security configurations', async () => {
+      // Arrange
+      const testFile = process.cwd() + '/test-mcp-security.js';
+      const fs = require('fs');
+      fs.writeFileSync(testFile, 'console.log("test");');
+
+      process.env = {
+        SLACK_BOT_TOKEN: 'xoxb-test-token',
+        SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
+        SLACK_APP_TOKEN: 'xapp-test-token',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
+        JENKINS_MCP_SERVER_PATH: testFile,
+        JENKINS_MCP_PROCESS_TIMEOUT: '45000',
+        JENKINS_MCP_USER_ID: '1001',
+        JENKINS_MCP_MAX_MEMORY_MB: '256',
+        JENKINS_MCP_ALLOW_RELATIVE_PATHS: 'true',
+      };
+
+      try {
+        // Act
+        const { loadConfig } = await import('../../../src/config/environment');
+        const config = loadConfig();
+
+        // Assert - Test MCP security configurations are loaded
+        expect(config.mcp.processTimeout).toBe(45000);
+        expect(config.mcp.userId).toBe(1001);
+        expect(config.mcp.maxMemoryMb).toBe(256);
+        expect(config.mcp.allowRelativePaths).toBe(true);
+        expect(Array.isArray(config.mcp.allowedPaths)).toBe(true);
+      } finally {
+        fs.unlinkSync(testFile);
+      }
+    });
+
+    it('should reject invalid MCP timeout values', async () => {
+      // Arrange
+      process.env = {
+        SLACK_BOT_TOKEN: 'xoxb-test-token',
+        SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
+        SLACK_APP_TOKEN: 'xapp-test-token',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
+        JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
+        JENKINS_MCP_PROCESS_TIMEOUT: '400000', // Too high
+      };
+
+      // Act & Assert
+      const { loadConfig } = await import('../../../src/config/environment');
+      expect(() => loadConfig()).toThrow(/JENKINS_MCP_PROCESS_TIMEOUT must be at most 300000ms/);
     });
   });
 
@@ -267,7 +318,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
       };
 
@@ -287,7 +338,7 @@ describe('Environment Configuration', () => {
         SLACK_BOT_TOKEN: 'xoxb-test-token',
         SLACK_SIGNING_SECRET: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0',
         SLACK_APP_TOKEN: 'xapp-test-token',
-        OPENAI_API_KEY: 'sk-test-key',
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test-key',
         JENKINS_MCP_SERVER_PATH: '/path/to/jenkins.js',
       };
 

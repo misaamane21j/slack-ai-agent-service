@@ -18,8 +18,8 @@ export interface SlackConfig {
  * AI service configuration
  */
 export interface AIConfig {
-  /** OpenAI API key for GPT models */
-  openaiApiKey: string;
+  /** Anthropic API key for Claude models */
+  anthropicApiKey: string;
   /** AI model to use for processing */
   model: string;
   /** Confidence threshold for AI responses (0-1) */

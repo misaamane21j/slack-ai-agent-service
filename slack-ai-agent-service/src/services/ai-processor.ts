@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import Joi from 'joi';
 import { getConfig } from '../config/environment';
 import { logger } from '../utils/logger';
@@ -37,13 +37,13 @@ const aiResponseSchema = Joi.object<AIResponse>({
 }).required();
 
 export class AIProcessorService {
-  private openai: OpenAI;
+  private anthropic: Anthropic;
   private config: any;
 
   constructor() {
     this.config = getConfig();
-    this.openai = new OpenAI({
-      apiKey: this.config.ai.openaiApiKey,
+    this.anthropic = new Anthropic({
+      apiKey: this.config.ai.anthropicApiKey,
     });
   }
 
@@ -51,22 +51,20 @@ export class AIProcessorService {
     try {
       const prompt = this.buildPrompt(message, context);
       
-      const response = await this.openai.chat.completions.create({
+      const response = await this.anthropic.messages.create({
         model: this.config.ai.model,
+        max_tokens: 1000,
+        temperature: 0.1,
+        system: 'Extract Jenkins job parameters from user messages. Return structured JSON with jobName, parameters, and confidence score.',
         messages: [
-          {
-            role: 'system',
-            content: 'Extract Jenkins job parameters from user messages. Return structured JSON with jobName, parameters, and confidence score.',
-          },
           {
             role: 'user',
             content: prompt,
           },
         ],
-        temperature: 0.1,
       });
 
-      const content = response.choices[0]?.message?.content;
+      const content = response.content[0]?.type === 'text' ? response.content[0].text : null;
       if (!content) {
         throw new Error('No response from AI model');
       }
@@ -168,23 +166,20 @@ Extract Jenkins job name from this message. Return only JSON format:
 Message: ${message}
       `.trim();
 
-      const response = await this.openai.chat.completions.create({
+      const response = await this.anthropic.messages.create({
         model: this.config.ai.model,
+        max_tokens: 200,
+        temperature: 0.0,
+        system: 'You are a JSON extraction tool. Only return valid JSON, no explanations.',
         messages: [
-          {
-            role: 'system',
-            content: 'You are a JSON extraction tool. Only return valid JSON, no explanations.',
-          },
           {
             role: 'user',
             content: simplifiedPrompt,
           },
         ],
-        temperature: 0.0,
-        max_tokens: 200,
       });
 
-      const content = response.choices[0]?.message?.content;
+      const content = response.content[0]?.type === 'text' ? response.content[0].text : null;
       if (!content) {
         throw new Error('No response from AI model on retry');
       }

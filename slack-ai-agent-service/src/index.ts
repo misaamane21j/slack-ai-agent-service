@@ -19,10 +19,10 @@ async function main() {
     console.error('- SLACK_BOT_TOKEN (format: xoxb-...)');
     console.error('- SLACK_SIGNING_SECRET (32-64 characters)');
     console.error('- SLACK_APP_TOKEN (format: xapp-...)');
-    console.error('- OPENAI_API_KEY (format: sk-...)');
+    console.error('- ANTHROPIC_API_KEY (format: sk-ant-api03-...)');
     console.error('- JENKINS_MCP_SERVER_PATH (path to Jenkins MCP server)');
     console.error('\n📝 Optional Environment Variables:');
-    console.error('- AI_MODEL (default: gpt-4-turbo)');
+    console.error('- AI_MODEL (default: claude-3-5-sonnet-20241022)');
     console.error('- AI_CONFIDENCE_THRESHOLD (default: 0.8)');
     console.error('- REDIS_URL (default: redis://localhost:6379)');
     console.error('- NODE_ENV (default: development)');

@@ -36,18 +36,18 @@ const environmentSchema = Joi.object<EnvironmentConfig>({
   }).required(),
   
   ai: Joi.object({
-    openaiApiKey: Joi.string()
-      .pattern(/^sk-/)
+    anthropicApiKey: Joi.string()
+      .pattern(/^sk-ant-api03-/)
       .required()
       .messages({
-        'string.pattern.base': 'OPENAI_API_KEY must start with "sk-"',
-        'any.required': 'OPENAI_API_KEY is required'
+        'string.pattern.base': 'ANTHROPIC_API_KEY must start with "sk-ant-api03-"',
+        'any.required': 'ANTHROPIC_API_KEY is required'
       }),
     model: Joi.string()
-      .valid('gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini')
-      .default('gpt-4-turbo')
+      .valid('claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307')
+      .default('claude-3-5-sonnet-20241022')
       .messages({
-        'any.only': 'AI_MODEL must be one of: gpt-4-turbo, gpt-4, gpt-3.5-turbo, gpt-4o, gpt-4o-mini'
+        'any.only': 'AI_MODEL must be one of: claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022, claude-3-opus-20240229, claude-3-sonnet-20240229, claude-3-haiku-20240307'
       }),
     confidenceThreshold: Joi.number()
       .min(0)
@@ -169,7 +169,7 @@ export function loadConfig(): EnvironmentConfig {
       appToken: process.env.SLACK_APP_TOKEN,
     },
     ai: {
-      openaiApiKey: process.env.OPENAI_API_KEY,
+      anthropicApiKey: process.env.ANTHROPIC_API_KEY,
       model: process.env.AI_MODEL,
       confidenceThreshold: process.env.AI_CONFIDENCE_THRESHOLD ? 
         parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) : undefined,

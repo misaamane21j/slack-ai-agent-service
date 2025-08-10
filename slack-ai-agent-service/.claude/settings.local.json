@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "mcp__task-master-ai__next_task",
-      "mcp__task-master-ai__set_task_status"
+      "mcp__task-master-ai__set_task_status",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
