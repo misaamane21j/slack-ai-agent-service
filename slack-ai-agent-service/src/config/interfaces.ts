@@ -32,6 +32,18 @@ export interface AIConfig {
 export interface MCPConfig {
   /** Path to the Jenkins MCP server executable */
   jenkinsServerPath: string;
+  /** Allowed directories for Jenkins MCP server executables */
+  allowedPaths: string[];
+  /** Process timeout in milliseconds */
+  processTimeout: number;
+  /** User ID to run the process as (Unix systems only) */
+  userId?: number;
+  /** Group ID to run the process as (Unix systems only) */
+  groupId?: number;
+  /** Maximum memory usage in MB */
+  maxMemoryMb?: number;
+  /** Whether to allow relative paths (development only) */
+  allowRelativePaths: boolean;
 }
 
 /**

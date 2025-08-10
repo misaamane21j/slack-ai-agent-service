@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import Joi from 'joi';
 import { EnvironmentConfig } from './interfaces';
+import { validateJenkinsPath, getDefaultAllowedPaths } from './security';
 
 dotenv.config();
 
@@ -61,9 +62,66 @@ const environmentSchema = Joi.object<EnvironmentConfig>({
   mcp: Joi.object({
     jenkinsServerPath: Joi.string()
       .required()
-      .messages({
-        'any.required': 'JENKINS_MCP_SERVER_PATH is required'
+      .custom((value, helpers) => {
+        // Basic path validation - full validation happens later in the MCP client
+        const allowedPaths = getDefaultAllowedPaths();
+        const allowRelativePaths = process.env.NODE_ENV === 'development';
+        
+        const isValid = validateJenkinsPath(value, {
+          allowedPaths,
+          requireExecutable: false,
+          allowRelativePaths,
+        });
+        
+        if (!isValid) {
+          return helpers.error('custom.insecurePath');
+        }
+        return value;
       })
+      .messages({
+        'any.required': 'JENKINS_MCP_SERVER_PATH is required',
+        'custom.insecurePath': 'JENKINS_MCP_SERVER_PATH is not in an allowed directory or contains unsafe components'
+      }),
+    allowedPaths: Joi.array()
+      .items(Joi.string().min(1))
+      .default(() => getDefaultAllowedPaths())
+      .messages({
+        'array.base': 'JENKINS_MCP_ALLOWED_PATHS must be a comma-separated list'
+      }),
+    processTimeout: Joi.number()
+      .integer()
+      .min(5000)
+      .max(300000)
+      .default(30000)
+      .messages({
+        'number.min': 'JENKINS_MCP_PROCESS_TIMEOUT must be at least 5000ms',
+        'number.max': 'JENKINS_MCP_PROCESS_TIMEOUT must be at most 300000ms (5 minutes)'
+      }),
+    userId: Joi.number()
+      .integer()
+      .min(1000)
+      .optional()
+      .messages({
+        'number.min': 'JENKINS_MCP_USER_ID must be at least 1000'
+      }),
+    groupId: Joi.number()
+      .integer()
+      .min(1000)
+      .optional()
+      .messages({
+        'number.min': 'JENKINS_MCP_GROUP_ID must be at least 1000'
+      }),
+    maxMemoryMb: Joi.number()
+      .integer()
+      .min(64)
+      .max(2048)
+      .optional()
+      .messages({
+        'number.min': 'JENKINS_MCP_MAX_MEMORY_MB must be at least 64MB',
+        'number.max': 'JENKINS_MCP_MAX_MEMORY_MB must be at most 2048MB'
+      }),
+    allowRelativePaths: Joi.boolean()
+      .default(false)
   }).required(),
   
   redis: Joi.object({
@@ -118,6 +176,20 @@ export function loadConfig(): EnvironmentConfig {
     },
     mcp: {
       jenkinsServerPath: process.env.JENKINS_MCP_SERVER_PATH,
+      allowedPaths: process.env.JENKINS_MCP_ALLOWED_PATHS ? 
+        process.env.JENKINS_MCP_ALLOWED_PATHS.split(',').map(p => p.trim()) : 
+        undefined,
+      processTimeout: process.env.JENKINS_MCP_PROCESS_TIMEOUT ? 
+        parseInt(process.env.JENKINS_MCP_PROCESS_TIMEOUT, 10) : undefined,
+      userId: process.env.JENKINS_MCP_USER_ID ? 
+        parseInt(process.env.JENKINS_MCP_USER_ID, 10) : undefined,
+      groupId: process.env.JENKINS_MCP_GROUP_ID ? 
+        parseInt(process.env.JENKINS_MCP_GROUP_ID, 10) : undefined,
+      maxMemoryMb: process.env.JENKINS_MCP_MAX_MEMORY_MB ? 
+        parseInt(process.env.JENKINS_MCP_MAX_MEMORY_MB, 10) : undefined,
+      allowRelativePaths: process.env.JENKINS_MCP_ALLOW_RELATIVE_PATHS === 'true' || 
+        (process.env.JENKINS_MCP_ALLOW_RELATIVE_PATHS === undefined && 
+         process.env.NODE_ENV === 'development'),
     },
     redis: {
       url: process.env.REDIS_URL,
@@ -132,6 +204,9 @@ export function loadConfig(): EnvironmentConfig {
   const { error, value } = environmentSchema.validate(rawConfig, {
     abortEarly: false,
     stripUnknown: true,
+    context: {
+      allowRelativePaths: rawConfig.app?.nodeEnv === 'development',
+    },
   });
 
   if (error) {
