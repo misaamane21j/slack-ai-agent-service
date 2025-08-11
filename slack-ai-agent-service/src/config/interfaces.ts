@@ -30,9 +30,13 @@ export interface AIConfig {
  * MCP (Model Context Protocol) configuration
  */
 export interface MCPConfig {
-  /** Path to the Jenkins MCP server executable */
-  jenkinsServerPath: string;
-  /** Allowed directories for Jenkins MCP server executables */
+  /** Path to MCP servers configuration file */
+  configFile: string;
+  /** Connection timeout per server in milliseconds */
+  connectionTimeout: number;
+  /** Maximum concurrent connections to MCP servers */
+  maxConcurrentConnections: number;
+  /** Allowed directories for MCP server executables */
   allowedPaths: string[];
   /** Process timeout in milliseconds */
   processTimeout: number;
@@ -44,6 +48,8 @@ export interface MCPConfig {
   maxMemoryMb?: number;
   /** Whether to allow relative paths (development only) */
   allowRelativePaths: boolean;
+  /** @deprecated Legacy Jenkins server path - use configFile instead */
+  jenkinsServerPath?: string;
 }
 
 /**

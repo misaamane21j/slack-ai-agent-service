@@ -4,8 +4,18 @@
       "mcp__task-master-ai__next_task",
       "mcp__task-master-ai__set_task_status",
       "Bash(npx tsc:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "mcp__task-master-ai__add_task",
+      "mcp__task-master-ai__get_tasks",
+      "mcp__task-master-ai__remove_dependency",
+      "mcp__task-master-ai__get_task",
+      "Bash(npm test:*)"
     ],
     "deny": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "task-master-ai",
+    "github",
+    "context7"
+  ]
 }

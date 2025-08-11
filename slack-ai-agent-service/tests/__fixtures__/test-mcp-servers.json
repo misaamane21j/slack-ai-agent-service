@@ -1,0 +1,44 @@
+{
+  "servers": {
+    "jenkins-test": {
+      "id": "jenkins-test",
+      "name": "Jenkins Test Server",
+      "description": "Test Jenkins MCP server for unit testing",
+      "command": "node",
+      "args": ["./test-jenkins-server.js"],
+      "env": {
+        "JENKINS_URL": "${TEST_JENKINS_URL}",
+        "JENKINS_USERNAME": "${TEST_JENKINS_USERNAME}",
+        "JENKINS_API_TOKEN": "${TEST_JENKINS_API_TOKEN}"
+      },
+      "enabled": true,
+      "timeout": 5000,
+      "maxRetries": 2
+    },
+    "github-test": {
+      "id": "github-test",
+      "name": "GitHub Test Server",
+      "description": "Test GitHub MCP server for unit testing",
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "test-github-server"],
+      "env": {
+        "GITHUB_TOKEN": "${TEST_GITHUB_TOKEN}"
+      },
+      "enabled": false,
+      "timeout": 10000,
+      "maxRetries": 1
+    },
+    "mock-server": {
+      "id": "mock-server",
+      "name": "Mock Test Server",
+      "description": "Mock server for testing registry functionality",
+      "command": "node",
+      "args": ["./mock-server.js"],
+      "env": {
+        "MOCK_MODE": "test"
+      },
+      "enabled": true,
+      "timeout": 3000
+    }
+  }
+}

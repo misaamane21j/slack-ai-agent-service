@@ -18,9 +18,13 @@ export class SlackBotService {
   }
 
   async initialize(): Promise<void> {
+    logger().info('🔧 Initializing Slack bot event handlers...');
+    
     this.app.event('app_mention', this.handleAppMention.bind(this));
     this.app.error(this.handleError.bind(this));
-    logger().info('Slack bot service initialized');
+    
+    logger().info('✅ Slack bot service initialized - listening for app mentions');
+    logger().info('🔍 To debug: mention your bot with @botname in any channel');
   }
 
   private async handleAppMention(
@@ -28,20 +32,43 @@ export class SlackBotService {
   ): Promise<void> {
     const { event: slackEvent, client, say } = event;
     
+    logger().info('🎯 App mention received!', {
+      user: slackEvent.user,
+      channel: slackEvent.channel,
+      text: slackEvent.text,
+      timestamp: slackEvent.ts,
+      thread_ts: slackEvent.thread_ts
+    });
+    
     try {
+      logger().info('➕ Adding thinking reaction...');
       await client.reactions.add({
         channel: slackEvent.channel,
         timestamp: slackEvent.ts,
         name: 'thinking_face',
       });
 
+      logger().info('📖 Getting thread context...');
       const threadContext = await this.getThreadContext(slackEvent);
+      
+      logger().info('🤖 Processing message with AI...', {
+        messageText: slackEvent.text.substring(0, 100),
+        contextLength: threadContext.length
+      });
+      
       const aiResponse = await this.aiProcessor.processMessage(
         slackEvent.text,
         threadContext
       );
+      
+      logger().info('✅ AI processing complete', {
+        confidence: aiResponse.confidence,
+        jobName: aiResponse.jobName,
+        threshold: this.aiProcessor.getConfidenceThreshold()
+      });
 
       if (aiResponse.confidence < this.aiProcessor.getConfidenceThreshold()) {
+        logger().info('⚠️ Low confidence response, sending help message');
         await say({
           thread_ts: slackEvent.ts,
           text: 'I\'m not confident about what you\'re asking. Could you please be more specific?',
@@ -119,6 +146,10 @@ export class SlackBotService {
   }
 
   private async handleError(error: Error): Promise<void> {
-    logger().error('Slack app error:', error);
+    logger().error('❌ Slack app error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
   }
 }

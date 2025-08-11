@@ -1,0 +1,11 @@
+# Task ID: 2
+# Title: AI Response Validation
+# Status: done
+# Dependencies: 1
+# Priority: high
+# Description: Add JSON parsing validation for AI responses to handle malformed responses gracefully
+# Details:
+Create Joi schema for AIResponse interface validation in src/services/ai-processor.ts. Add try-catch blocks around JSON.parse() calls with proper error handling. Implement fallback behavior for malformed responses (retry with simplified prompt, return default safe response). Add response structure validation before processing. Include logging for failed parse attempts.
+
+# Test Strategy:
+Unit tests with malformed JSON responses, partial JSON, and valid responses. Test fallback behavior and error handling. Mock AI service to return various response formats and verify graceful handling.

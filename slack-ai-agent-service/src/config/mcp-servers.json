@@ -1,0 +1,45 @@
+{
+  "servers": {
+    "jenkins": {
+      "id": "jenkins",
+      "name": "Jenkins CI/CD",
+      "description": "Manage Jenkins jobs and builds",
+      "command": "node",
+      "args": ["../jenkins-mcp-server/dist/index.js"],
+      "env": {
+        "JENKINS_URL": "${JENKINS_URL}",
+        "JENKINS_USERNAME": "${JENKINS_USERNAME}",
+        "JENKINS_API_TOKEN": "${JENKINS_API_TOKEN}"
+      },
+      "enabled": true,
+      "timeout": 30000,
+      "maxRetries": 3
+    },
+    "github": {
+      "id": "github",
+      "name": "GitHub Integration",
+      "description": "Manage GitHub repositories and issues",
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "ghcr.io/github/github-mcp-server"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "enabled": false,
+      "timeout": 30000,
+      "maxRetries": 3
+    },
+    "database": {
+      "id": "database",
+      "name": "Database Operations",
+      "description": "Query and manage database operations",
+      "command": "python",
+      "args": ["database-mcp-server.py"],
+      "env": {
+        "DB_CONNECTION_STRING": "${DB_CONNECTION_STRING}"
+      },
+      "enabled": false,
+      "timeout": 30000,
+      "maxRetries": 3
+    }
+  }
+}

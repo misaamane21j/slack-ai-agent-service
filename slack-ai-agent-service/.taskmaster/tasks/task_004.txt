@@ -1,0 +1,11 @@
+# Task ID: 4
+# Title: Security Improvements for Process Spawning
+# Status: done
+# Dependencies: 1
+# Priority: high
+# Description: Secure the MCP client process spawning with validation and security constraints
+# Details:
+Add path validation for MCP server executable in src/services/mcp-client.ts. Implement process isolation using spawn options (detached: false, shell: false). Add process monitoring with timeout mechanisms. Implement proper cleanup of child processes on application shutdown. Add resource limits and security constraints. Validate command arguments before spawning.
+
+# Test Strategy:
+Unit tests for path validation and process spawning security. Integration tests for process cleanup and timeout handling. Test malicious path inputs and command injection attempts. Monitor resource usage during process execution.

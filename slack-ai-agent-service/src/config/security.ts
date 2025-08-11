@@ -1,6 +1,5 @@
 import path from 'path';
 import fs from 'fs';
-import { logger } from '../utils/logger';
 
 /**
  * Security validation for MCP server paths and process spawning
@@ -25,21 +24,25 @@ export function validateJenkinsPath(
   try {
     // 1. Basic input validation
     if (!jenkinsPath || typeof jenkinsPath !== 'string') {
-      logger().warn('Jenkins path validation failed: invalid input');
+      console.warn('Jenkins path validation failed: invalid input');
       return false;
     }
 
     // 2. Check for dangerous characters and patterns
     const dangerousPatterns = [
-      /\.\./,           // Directory traversal
       /[;&|`$()]/,      // Shell injection characters
       /\0/,             // Null bytes
       /^\s*$/,          // Empty or whitespace only
     ];
 
+    // Only check for directory traversal if relative paths are not allowed
+    if (!options.allowRelativePaths) {
+      dangerousPatterns.push(/\.\./);
+    }
+
     for (const pattern of dangerousPatterns) {
       if (pattern.test(jenkinsPath)) {
-        logger().warn(`Jenkins path validation failed: dangerous pattern detected in ${jenkinsPath}`);
+        console.warn(`Jenkins path validation failed: dangerous pattern detected in ${jenkinsPath}`);
         return false;
       }
     }
@@ -49,7 +52,7 @@ export function validateJenkinsPath(
     try {
       absolutePath = path.resolve(jenkinsPath);
     } catch (error) {
-      logger().warn(`Jenkins path validation failed: cannot resolve path ${jenkinsPath}`, error);
+      console.warn(`Jenkins path validation failed: cannot resolve path ${jenkinsPath}`, error);
       return false;
     }
 
@@ -60,7 +63,7 @@ export function validateJenkinsPath(
     });
 
     if (!isInAllowedDir && !options.allowRelativePaths) {
-      logger().warn(`Jenkins path validation failed: ${absolutePath} not in allowed directories`);
+      console.warn(`Jenkins path validation failed: ${absolutePath} not in allowed directories`);
       return false;
     }
 
@@ -68,7 +71,7 @@ export function validateJenkinsPath(
     try {
       fs.accessSync(absolutePath, fs.constants.F_OK);
     } catch {
-      logger().warn(`Jenkins path validation failed: file does not exist ${absolutePath}`);
+      console.warn(`Jenkins path validation failed: file does not exist ${absolutePath}`);
       return false;
     }
 
@@ -77,7 +80,7 @@ export function validateJenkinsPath(
       try {
         fs.accessSync(absolutePath, fs.constants.X_OK);
       } catch {
-        logger().warn(`Jenkins path validation failed: file not executable ${absolutePath}`);
+        console.warn(`Jenkins path validation failed: file not executable ${absolutePath}`);
         return false;
       }
     }
@@ -86,18 +89,18 @@ export function validateJenkinsPath(
     try {
       const stats = fs.statSync(absolutePath);
       if (!stats.isFile()) {
-        logger().warn(`Jenkins path validation failed: not a regular file ${absolutePath}`);
+        console.warn(`Jenkins path validation failed: not a regular file ${absolutePath}`);
         return false;
       }
     } catch (error) {
-      logger().warn(`Jenkins path validation failed: cannot stat file ${absolutePath}`, error);
+      console.warn(`Jenkins path validation failed: cannot stat file ${absolutePath}`, error);
       return false;
     }
 
-    logger().debug(`Jenkins path validation passed: ${absolutePath}`);
+    console.debug(`Jenkins path validation passed: ${absolutePath}`);
     return true;
   } catch (error) {
-    logger().error('Unexpected error during Jenkins path validation:', error);
+    console.error('Unexpected error during Jenkins path validation:', error);
     return false;
   }
 }
@@ -133,7 +136,7 @@ export function getDefaultAllowedPaths(): string[] {
 export function validateSpawnArguments(command: string, args: string[] = []): boolean {
   // 1. Validate command
   if (!command || typeof command !== 'string') {
-    logger().warn('Spawn validation failed: invalid command');
+    console.warn('Spawn validation failed: invalid command');
     return false;
   }
 
@@ -146,7 +149,7 @@ export function validateSpawnArguments(command: string, args: string[] = []): bo
 
   for (const pattern of dangerousCommandPatterns) {
     if (pattern.test(command)) {
-      logger().warn(`Spawn validation failed: dangerous pattern in command ${command}`);
+      console.warn(`Spawn validation failed: dangerous pattern in command ${command}`);
       return false;
     }
   }
@@ -154,18 +157,18 @@ export function validateSpawnArguments(command: string, args: string[] = []): bo
   // 3. Validate arguments
   for (const arg of args) {
     if (typeof arg !== 'string') {
-      logger().warn('Spawn validation failed: non-string argument');
+      console.warn('Spawn validation failed: non-string argument');
       return false;
     }
 
     for (const pattern of dangerousCommandPatterns) {
       if (pattern.test(arg)) {
-        logger().warn(`Spawn validation failed: dangerous pattern in argument ${arg}`);
+        console.warn(`Spawn validation failed: dangerous pattern in argument ${arg}`);
         return false;
       }
     }
   }
 
-  logger().debug(`Spawn validation passed: ${command} with ${args.length} arguments`);
+  console.debug(`Spawn validation passed: ${command} with ${args.length} arguments`);
   return true;
 }

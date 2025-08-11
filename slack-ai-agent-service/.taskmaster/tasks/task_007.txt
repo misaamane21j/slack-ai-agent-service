@@ -1,0 +1,11 @@
+# Task ID: 7
+# Title: Rate Limiting & Abuse Protection
+# Status: pending
+# Dependencies: 5, 6
+# Priority: medium
+# Description: Implement rate limiting and abuse protection to prevent spam and abuse of the bot
+# Details:
+Implement per-user rate limiting using Redis or in-memory store. Add cooldown periods for Jenkins job triggers per user/job combination. Create sliding window rate limiting algorithm. Add suspicious activity detection (rapid requests, unusual patterns). Implement progressive penalties for abuse. Add whitelist/blacklist functionality for users. Log rate limiting events for monitoring.
+
+# Test Strategy:
+Unit tests for rate limiting algorithms and cooldown logic. Integration tests with multiple concurrent users. Test abuse detection and penalty systems. Performance tests under high request volume.

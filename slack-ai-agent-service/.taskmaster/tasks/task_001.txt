@@ -1,0 +1,43 @@
+# Task ID: 1
+# Title: Environment Variable Validation
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Implement environment variable validation using Joi to replace non-null assertions with proper validation
+# Details:
+Create a comprehensive Joi schema in src/config/environment.ts that validates all required environment variables (SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, JENKINS_URL, JENKINS_USERNAME, JENKINS_API_TOKEN, ANTHROPIC_API_KEY, etc.). Replace current non-null assertions with proper validation that throws descriptive errors. Add TypeScript interfaces for validated configuration. Include validation for URL formats, token patterns, and required vs optional variables.
+
+# Test Strategy:
+Unit tests for schema validation with valid and invalid environment configurations. Test error messages for missing variables. Integration tests ensuring application fails gracefully with clear messages when misconfigured.
+
+# Subtasks:
+## 1. Create TypeScript interfaces for environment configuration [done]
+### Dependencies: None
+### Description: Define TypeScript interfaces that represent the validated environment configuration structure, including all required and optional environment variables.
+### Details:
+Create a file `src/config/interfaces.ts` that defines TypeScript interfaces for the environment configuration. Include interfaces for all configuration categories (Slack, Jenkins, AI services, etc.). Define proper types for each variable (string, number, boolean) and document each field with JSDoc comments. Create a main `EnvironmentConfig` interface that combines all category interfaces.
+
+## 2. Implement Joi schema for environment variables [done]
+### Dependencies: None
+### Description: Create a comprehensive Joi validation schema that defines validation rules for all environment variables.
+### Details:
+In `src/config/environment.ts`, import Joi and create a validation schema that covers all environment variables. Define specific validation rules for each variable type: URL format validation for URLs (JENKINS_URL), token pattern validation for API keys, required vs optional flags. Group related variables into logical schema objects. Include descriptive error messages for validation failures.
+
+## 3. Create environment loading and validation function [done]
+### Dependencies: None
+### Description: Implement a function that loads environment variables, validates them against the Joi schema, and returns a typed configuration object.
+### Details:
+Create a `loadConfig()` function in `src/config/environment.ts` that reads environment variables using `process.env`, validates them using the Joi schema, and returns a properly typed configuration object. Handle validation errors by throwing descriptive exceptions that include which variables failed validation and why. Implement sensible defaults for optional variables. Return the validated configuration object that matches the TypeScript interfaces.
+
+## 4. Replace non-null assertions with validated configuration [done]
+### Dependencies: None
+### Description: Update all code that currently uses non-null assertions (!) on environment variables to use the validated configuration object instead.
+### Details:
+Search the codebase for all instances of `process.env` access and non-null assertions on environment variables. Replace these with references to the validated configuration object. Update imports to include the new configuration. Ensure type safety throughout the application by using the typed configuration object. This includes updating services that depend on environment variables like Slack, Jenkins, and AI services.
+
+## 5. Add application startup validation and error reporting [done]
+### Dependencies: None
+### Description: Implement validation at application startup that provides clear error messages when environment variables are missing or invalid.
+### Details:
+In the application entry point (e.g., `src/index.ts`), add a try-catch block around the configuration loading. When validation fails, provide a user-friendly error message that clearly indicates which environment variables are missing or invalid and how to fix the issues. Include instructions for setting up environment variables in different environments. Implement a graceful shutdown process when configuration is invalid. Add logging of configuration issues without exposing sensitive values.
+

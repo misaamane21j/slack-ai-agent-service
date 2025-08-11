@@ -13,8 +13,9 @@ export class MCPClientService {
     try {
       const config = getConfig();
       
-      // Validate Jenkins server path
-      const isPathValid = validateJenkinsPath(config.mcp.jenkinsServerPath, {
+      // Validate Jenkins server path (legacy compatibility)
+      const jenkinsServerPath = config.mcp.jenkinsServerPath || '../jenkins-mcp-server/dist/index.js';
+      const isPathValid = validateJenkinsPath(jenkinsServerPath, {
         allowedPaths: config.mcp.allowedPaths,
         requireExecutable: true,
         allowRelativePaths: config.mcp.allowRelativePaths,
@@ -26,7 +27,7 @@ export class MCPClientService {
       
       // Validate spawn arguments
       const command = 'node';
-      const args = [config.mcp.jenkinsServerPath];
+      const args = [jenkinsServerPath];
       
       if (!validateSpawnArguments(command, args)) {
         throw new Error('Jenkins server spawn arguments validation failed: arguments contain unsafe patterns');
@@ -64,7 +65,7 @@ export class MCPClientService {
       clearTimeout(connectTimeout);
       
       logger().info('MCP client connected to Jenkins server with enhanced security', {
-        path: config.mcp.jenkinsServerPath,
+        path: jenkinsServerPath,
         timeout: config.mcp.processTimeout,
         allowRelativePaths: config.mcp.allowRelativePaths,
       });

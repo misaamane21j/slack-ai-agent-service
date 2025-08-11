@@ -60,9 +60,15 @@ const environmentSchema = Joi.object<EnvironmentConfig>({
   }).required(),
   
   mcp: Joi.object({
+    configFile: Joi.string()
+      .default('./src/config/mcp-servers.json')
+      .messages({
+        'string.base': 'MCP_CONFIG_FILE must be a valid file path'
+      }),
     jenkinsServerPath: Joi.string()
-      .required()
+      .optional()
       .custom((value, helpers) => {
+        if (!value) return value;
         // Basic path validation - full validation happens later in the MCP client
         const allowedPaths = getDefaultAllowedPaths();
         const allowRelativePaths = process.env.NODE_ENV === 'development';
@@ -79,14 +85,31 @@ const environmentSchema = Joi.object<EnvironmentConfig>({
         return value;
       })
       .messages({
-        'any.required': 'JENKINS_MCP_SERVER_PATH is required',
         'custom.insecurePath': 'JENKINS_MCP_SERVER_PATH is not in an allowed directory or contains unsafe components'
+      }),
+    connectionTimeout: Joi.number()
+      .integer()
+      .min(5000)
+      .max(60000)
+      .default(30000)
+      .messages({
+        'number.min': 'MCP_CONNECTION_TIMEOUT must be at least 5000ms',
+        'number.max': 'MCP_CONNECTION_TIMEOUT must be at most 60000ms (1 minute)'
+      }),
+    maxConcurrentConnections: Joi.number()
+      .integer()
+      .min(1)
+      .max(10)
+      .default(5)
+      .messages({
+        'number.min': 'MCP_MAX_CONCURRENT_CONNECTIONS must be at least 1',
+        'number.max': 'MCP_MAX_CONCURRENT_CONNECTIONS must be at most 10'
       }),
     allowedPaths: Joi.array()
       .items(Joi.string().min(1))
       .default(() => getDefaultAllowedPaths())
       .messages({
-        'array.base': 'JENKINS_MCP_ALLOWED_PATHS must be a comma-separated list'
+        'array.base': 'MCP_ALLOWED_PATHS must be a comma-separated list'
       }),
     processTimeout: Joi.number()
       .integer()
@@ -94,22 +117,22 @@ const environmentSchema = Joi.object<EnvironmentConfig>({
       .max(300000)
       .default(30000)
       .messages({
-        'number.min': 'JENKINS_MCP_PROCESS_TIMEOUT must be at least 5000ms',
-        'number.max': 'JENKINS_MCP_PROCESS_TIMEOUT must be at most 300000ms (5 minutes)'
+        'number.min': 'MCP_PROCESS_TIMEOUT must be at least 5000ms',
+        'number.max': 'MCP_PROCESS_TIMEOUT must be at most 300000ms (5 minutes)'
       }),
     userId: Joi.number()
       .integer()
       .min(1000)
       .optional()
       .messages({
-        'number.min': 'JENKINS_MCP_USER_ID must be at least 1000'
+        'number.min': 'MCP_USER_ID must be at least 1000'
       }),
     groupId: Joi.number()
       .integer()
       .min(1000)
       .optional()
       .messages({
-        'number.min': 'JENKINS_MCP_GROUP_ID must be at least 1000'
+        'number.min': 'MCP_GROUP_ID must be at least 1000'
       }),
     maxMemoryMb: Joi.number()
       .integer()
@@ -117,8 +140,8 @@ const environmentSchema = Joi.object<EnvironmentConfig>({
       .max(2048)
       .optional()
       .messages({
-        'number.min': 'JENKINS_MCP_MAX_MEMORY_MB must be at least 64MB',
-        'number.max': 'JENKINS_MCP_MAX_MEMORY_MB must be at most 2048MB'
+        'number.min': 'MCP_MAX_MEMORY_MB must be at least 64MB',
+        'number.max': 'MCP_MAX_MEMORY_MB must be at most 2048MB'
       }),
     allowRelativePaths: Joi.boolean()
       .default(false)
@@ -175,20 +198,25 @@ export function loadConfig(): EnvironmentConfig {
         parseFloat(process.env.AI_CONFIDENCE_THRESHOLD) : undefined,
     },
     mcp: {
+      configFile: process.env.MCP_CONFIG_FILE,
       jenkinsServerPath: process.env.JENKINS_MCP_SERVER_PATH,
-      allowedPaths: process.env.JENKINS_MCP_ALLOWED_PATHS ? 
-        process.env.JENKINS_MCP_ALLOWED_PATHS.split(',').map(p => p.trim()) : 
+      connectionTimeout: process.env.MCP_CONNECTION_TIMEOUT ? 
+        parseInt(process.env.MCP_CONNECTION_TIMEOUT, 10) : undefined,
+      maxConcurrentConnections: process.env.MCP_MAX_CONCURRENT_CONNECTIONS ? 
+        parseInt(process.env.MCP_MAX_CONCURRENT_CONNECTIONS, 10) : undefined,
+      allowedPaths: process.env.MCP_ALLOWED_PATHS ? 
+        process.env.MCP_ALLOWED_PATHS.split(',').map(p => p.trim()) : 
         undefined,
-      processTimeout: process.env.JENKINS_MCP_PROCESS_TIMEOUT ? 
-        parseInt(process.env.JENKINS_MCP_PROCESS_TIMEOUT, 10) : undefined,
-      userId: process.env.JENKINS_MCP_USER_ID ? 
-        parseInt(process.env.JENKINS_MCP_USER_ID, 10) : undefined,
-      groupId: process.env.JENKINS_MCP_GROUP_ID ? 
-        parseInt(process.env.JENKINS_MCP_GROUP_ID, 10) : undefined,
-      maxMemoryMb: process.env.JENKINS_MCP_MAX_MEMORY_MB ? 
-        parseInt(process.env.JENKINS_MCP_MAX_MEMORY_MB, 10) : undefined,
-      allowRelativePaths: process.env.JENKINS_MCP_ALLOW_RELATIVE_PATHS === 'true' || 
-        (process.env.JENKINS_MCP_ALLOW_RELATIVE_PATHS === undefined && 
+      processTimeout: process.env.MCP_PROCESS_TIMEOUT ? 
+        parseInt(process.env.MCP_PROCESS_TIMEOUT, 10) : undefined,
+      userId: process.env.MCP_USER_ID ? 
+        parseInt(process.env.MCP_USER_ID, 10) : undefined,
+      groupId: process.env.MCP_GROUP_ID ? 
+        parseInt(process.env.MCP_GROUP_ID, 10) : undefined,
+      maxMemoryMb: process.env.MCP_MAX_MEMORY_MB ? 
+        parseInt(process.env.MCP_MAX_MEMORY_MB, 10) : undefined,
+      allowRelativePaths: process.env.MCP_ALLOW_RELATIVE_PATHS === 'true' || 
+        (process.env.MCP_ALLOW_RELATIVE_PATHS === undefined && 
          process.env.NODE_ENV === 'development'),
     },
     redis: {
