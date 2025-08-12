@@ -119,6 +119,41 @@ export {
   PreservationStatistics
 } from './context/ContextPreserver';
 
+// Error Boundaries for MCP Integration (Task 6.3)
+export {
+  ErrorBoundary,
+  BoundaryType,
+  BoundaryState,
+  BoundaryMetrics,
+  BoundaryConfig,
+  BoundaryResult,
+  BoundaryManager,
+  ToolExecutionBoundary,
+  ToolExecutionConfig,
+  ToolExecutionResult,
+  ToolMetadata,
+  RegistryBoundary,
+  RegistryConfig,
+  RegistryResult,
+  ToolRegistryEntry,
+  RegistryCache,
+  AIProcessingBoundary,
+  AIProcessingConfig,
+  AIProcessingResult,
+  AIResponse,
+  ProcessingContext,
+  ConfigurationBoundary,
+  ConfigurationBoundaryConfig,
+  ConfigurationResult,
+  ConfigurationChange,
+  ConfigurationSnapshot,
+  SlackResponseBoundary,
+  SlackResponseConfig,
+  SlackResponseResult,
+  SlackResponse,
+  ResponseDeliveryContext
+} from './boundaries';
+
 /**
  * Utility functions for error handling
  */
