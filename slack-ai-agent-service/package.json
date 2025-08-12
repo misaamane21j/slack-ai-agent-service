@@ -8,6 +8,11 @@
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
     "test": "jest",
+    "test:monitoring": "jest tests/unit/monitoring tests/integration/monitoring",
+    "test:monitoring:manual": "npx ts-node scripts/test-monitoring.ts",
+    "test:monitoring:performance": "npx ts-node scripts/test-monitoring-performance.ts",
+    "test:monitoring:scenarios": "npx ts-node scripts/test-monitoring-scenarios.ts",
+    "test:monitoring:all": "npm run test:monitoring && npm run test:monitoring:manual && npm run test:monitoring:performance",
     "lint": "eslint src/**/*.ts",
     "typecheck": "tsc --noEmit"
   },
