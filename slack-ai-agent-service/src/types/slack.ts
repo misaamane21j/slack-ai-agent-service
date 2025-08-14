@@ -39,3 +39,32 @@ export interface FilteredMessage {
   hasReactions: boolean;
   isThreadReply: boolean;
 }
+
+export interface RateLimitInfo {
+  isLimited: boolean;
+  currentRequests: number;
+  maxRequests: number;
+  resetTimeSeconds: number;
+  resetTime: Date;
+}
+
+export interface UserActivityMetrics {
+  userId: string;
+  requestCount: number;
+  lastRequestTime: Date;
+  averageInterval: number;
+  suspiciousScore: number;
+  isBlocked: boolean;
+  blockReason?: string;
+  blockExpiresAt?: Date;
+}
+
+export interface ActivityAlert {
+  userId: string;
+  alertType: 'rapid_requests' | 'unusual_volume' | 'bot_behavior' | 'pattern_anomaly';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  details: any;
+  timestamp: Date;
+  acknowledged: boolean;
+}
