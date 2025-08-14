@@ -18,3 +18,24 @@ export interface SlackThreadContext {
   messages: SlackMessage[];
   participants: string[];
 }
+
+export interface ThreadContextFilterOptions {
+  maxMessages?: number;
+  timeWindowHours?: number;
+  excludeSystemMessages?: boolean;
+  excludeBotMessages?: boolean;
+  includeReactions?: boolean;
+  relevanceScoring?: boolean;
+  prioritizeRecentMessages?: boolean;
+  prioritizeUserMentions?: boolean;
+}
+
+export interface FilteredMessage {
+  originalMessage: any;
+  relevanceScore: number;
+  messageType: 'user' | 'bot' | 'system';
+  timestamp: Date;
+  hasUserMentions: boolean;
+  hasReactions: boolean;
+  isThreadReply: boolean;
+}

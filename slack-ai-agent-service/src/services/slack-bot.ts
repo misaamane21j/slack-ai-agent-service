@@ -6,9 +6,25 @@ import { MCPClientService } from './mcp-client';
 import { NotificationService } from './notification';
 import { AIAgentResponse, ToolInvocationResult } from '../types/ai-agent';
 import { MCPRegistryService } from './mcp-registry';
+import { SlackMessage, ThreadContextFilterOptions, FilteredMessage } from '../types/slack';
+import { createClient, RedisClientType } from 'redis';
 
 export class SlackBotService {
   private parameterSanitizer: ParameterSanitizer;
+  private rateLimitTracker: {
+    requestCount: number;
+    windowStart: number;
+    retryAfter?: number;
+  } = {
+    requestCount: 0,
+    windowStart: Date.now()
+  };
+  private redisClient: RedisClientType | null = null;
+  private cacheMetrics = {
+    hits: 0,
+    misses: 0,
+    invalidations: 0
+  };
 
   constructor(
     private app: App,
@@ -23,6 +39,9 @@ export class SlackBotService {
   async initialize(): Promise<void> {
     logger().info('🔧 Initializing enhanced Slack bot event handlers...');
     
+    // Initialize Redis cache
+    await this.initializeCache();
+    
     // Core event handlers
     this.app.event('app_mention', this.handleAppMention.bind(this));
     this.app.error(this.handleError.bind(this));
@@ -30,9 +49,191 @@ export class SlackBotService {
     // Initialize interactive handlers for buttons and modals
     this.initializeInteractiveHandlers();
     
+    // Set up cache invalidation on new messages
+    this.setupCacheInvalidation();
+    
     logger().info('✅ Enhanced Slack bot service initialized with interactive features');
-    logger().info('🔍 Features: app mentions, interactive buttons, rich formatting, tool help');
+    logger().info('🔍 Features: app mentions, interactive buttons, rich formatting, tool help, Redis caching');
     logger().info('🎯 To debug: mention your bot with @botname in any channel');
+  }
+
+  /**
+   * Initialize Redis cache connection
+   */
+  private async initializeCache(): Promise<void> {
+    try {
+      const { getConfig } = await import('../config/environment');
+      const config = getConfig();
+      
+      this.redisClient = createClient({
+        url: config.redis.url
+      });
+
+      this.redisClient.on('error', (err) => {
+        logger().error('Redis client error:', err);
+      });
+
+      this.redisClient.on('connect', () => {
+        logger().info('✅ Redis client connected successfully');
+      });
+
+      this.redisClient.on('disconnect', () => {
+        logger().warn('⚠️ Redis client disconnected');
+      });
+
+      await this.redisClient.connect();
+      
+      logger().info('🚀 Redis caching initialized', {
+        url: config.redis.url.replace(/:\/\/[^@]*@/, '://***@'), // Hide credentials in logs
+        cacheEnabled: true
+      });
+
+    } catch (error) {
+      logger().error('❌ Failed to initialize Redis cache:', error);
+      logger().warn('⚠️ Continuing without cache - performance may be impacted');
+      this.redisClient = null;
+    }
+  }
+
+  /**
+   * Generate cache key for thread context
+   */
+  private generateCacheKey(channelId: string, threadTs: string): string {
+    return `thread_context:${channelId}:${threadTs}`;
+  }
+
+  /**
+   * Get thread context from cache
+   */
+  private async getCachedThreadContext(channelId: string, threadTs: string): Promise<string[] | null> {
+    if (!this.redisClient) {
+      return null;
+    }
+
+    try {
+      const cacheKey = this.generateCacheKey(channelId, threadTs);
+      const cached = await this.redisClient.get(cacheKey);
+      
+      if (cached) {
+        this.cacheMetrics.hits++;
+        const contextMessages = JSON.parse(cached);
+        
+        logger().info('🎯 Cache hit for thread context', {
+          cacheKey,
+          messageCount: contextMessages.length,
+          hitRate: (this.cacheMetrics.hits / (this.cacheMetrics.hits + this.cacheMetrics.misses) * 100).toFixed(2) + '%'
+        });
+        
+        return contextMessages;
+      } else {
+        this.cacheMetrics.misses++;
+        
+        logger().info('❌ Cache miss for thread context', {
+          cacheKey,
+          hitRate: (this.cacheMetrics.hits / (this.cacheMetrics.hits + this.cacheMetrics.misses) * 100).toFixed(2) + '%'
+        });
+        
+        return null;
+      }
+    } catch (error) {
+      logger().error('❌ Error getting cached thread context:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Cache thread context with TTL
+   */
+  private async cacheThreadContext(
+    channelId: string, 
+    threadTs: string, 
+    contextMessages: string[], 
+    ttlMinutes: number = 15
+  ): Promise<void> {
+    if (!this.redisClient || contextMessages.length === 0) {
+      return;
+    }
+
+    try {
+      const cacheKey = this.generateCacheKey(channelId, threadTs);
+      const ttlSeconds = ttlMinutes * 60;
+      
+      await this.redisClient.setEx(cacheKey, ttlSeconds, JSON.stringify(contextMessages));
+      
+      logger().info('💾 Thread context cached successfully', {
+        cacheKey,
+        messageCount: contextMessages.length,
+        ttlMinutes,
+        expiresAt: new Date(Date.now() + (ttlSeconds * 1000)).toISOString()
+      });
+      
+    } catch (error) {
+      logger().error('❌ Error caching thread context:', error);
+    }
+  }
+
+  /**
+   * Invalidate cached thread context (e.g., when new messages are added)
+   */
+  private async invalidateThreadContext(channelId: string, threadTs: string): Promise<void> {
+    if (!this.redisClient) {
+      return;
+    }
+
+    try {
+      const cacheKey = this.generateCacheKey(channelId, threadTs);
+      const deleted = await this.redisClient.del(cacheKey);
+      
+      if (deleted > 0) {
+        this.cacheMetrics.invalidations++;
+        
+        logger().info('🗑️ Thread context cache invalidated', {
+          cacheKey,
+          invalidationCount: this.cacheMetrics.invalidations
+        });
+      }
+      
+    } catch (error) {
+      logger().error('❌ Error invalidating thread context cache:', error);
+    }
+  }
+
+  /**
+   * Get cache statistics
+   */
+  private getCacheStats(): Record<string, any> {
+    const total = this.cacheMetrics.hits + this.cacheMetrics.misses;
+    const hitRate = total > 0 ? (this.cacheMetrics.hits / total * 100).toFixed(2) : '0.00';
+    
+    return {
+      enabled: !!this.redisClient,
+      hits: this.cacheMetrics.hits,
+      misses: this.cacheMetrics.misses,
+      invalidations: this.cacheMetrics.invalidations,
+      hitRate: hitRate + '%',
+      total: total
+    };
+  }
+
+  /**
+   * Set up cache invalidation on new messages
+   */
+  private setupCacheInvalidation(): void {
+    // Listen for new messages to invalidate relevant caches
+    this.app.event('message', async ({ event }) => {
+      // Only invalidate for thread replies (not channel messages)
+      if (event.thread_ts) {
+        await this.invalidateThreadContext(event.channel, event.thread_ts);
+        
+        logger().info('🔄 Cache invalidated due to new thread message', {
+          channel: event.channel,
+          threadTs: event.thread_ts,
+          messageTs: event.ts
+        });
+      }
+    });
+
+    logger().info('🔄 Cache invalidation listeners set up for new thread messages');
   }
 
   private async handleAppMention(
@@ -57,7 +258,7 @@ export class SlackBotService {
       });
 
       logger().info('📖 Getting thread context...');
-      const threadContext = await this.getThreadContext(slackEvent);
+      const threadContext = await this.getThreadContext(slackEvent, client);
       
       logger().info('🤖 Processing message with AI...', {
         messageText: slackEvent.text.substring(0, 100),
@@ -415,15 +616,455 @@ export class SlackBotService {
   }
 
   /**
-   * Enhanced thread context fetching with better error handling
+   * Rate-limited API call wrapper with exponential backoff retry
    */
-  private async getThreadContext(event: any): Promise<string[]> {
+  private async makeRateLimitedApiCall<T>(
+    apiCall: () => Promise<T>,
+    operation: string,
+    maxRetries: number = 3
+  ): Promise<T> {
+    const REQUESTS_PER_MINUTE = 50; // Slack API limit for conversations.replies
+    const WINDOW_SIZE = 60 * 1000; // 1 minute in milliseconds
+
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        // Check rate limit window
+        const now = Date.now();
+        if (now - this.rateLimitTracker.windowStart >= WINDOW_SIZE) {
+          // Reset the window
+          this.rateLimitTracker.windowStart = now;
+          this.rateLimitTracker.requestCount = 0;
+        }
+
+        // Check if we're within rate limits
+        if (this.rateLimitTracker.requestCount >= REQUESTS_PER_MINUTE) {
+          const waitTime = WINDOW_SIZE - (now - this.rateLimitTracker.windowStart);
+          logger().warn(`⚠️ Rate limit reached, waiting ${waitTime}ms before retry`, {
+            operation,
+            attempt,
+            requestCount: this.rateLimitTracker.requestCount
+          });
+          await this.sleep(waitTime);
+          continue; // Retry after waiting
+        }
+
+        // Check if we need to wait due to previous 429 response
+        if (this.rateLimitTracker.retryAfter && now < this.rateLimitTracker.retryAfter) {
+          const waitTime = this.rateLimitTracker.retryAfter - now;
+          logger().warn(`⚠️ Waiting due to previous 429 response: ${waitTime}ms`, {
+            operation,
+            attempt
+          });
+          await this.sleep(waitTime);
+        }
+
+        // Make the API call
+        this.rateLimitTracker.requestCount++;
+        const result = await apiCall();
+
+        // Monitor rate limit headers if available
+        const rateLimitHeaders = this.extractRateLimitHeaders(result);
+        
+        logger().info('✅ API call successful', {
+          operation,
+          attempt,
+          requestCount: this.rateLimitTracker.requestCount,
+          windowStart: new Date(this.rateLimitTracker.windowStart).toISOString(),
+          ...rateLimitHeaders
+        });
+
+        return result;
+
+      } catch (error: any) {
+        // Handle rate limit errors (429)
+        if (error?.data?.error === 'rate_limited' || error?.status === 429) {
+          const retryAfter = error?.data?.retry_after || error?.headers?.['retry-after'];
+          const backoffTime = retryAfter 
+            ? parseInt(retryAfter) * 1000 
+            : Math.min(1000 * Math.pow(2, attempt - 1), 30000); // Exponential backoff, max 30s
+
+          this.rateLimitTracker.retryAfter = Date.now() + backoffTime;
+
+          logger().warn(`🚦 Rate limit hit (429), backing off for ${backoffTime}ms`, {
+            operation,
+            attempt,
+            maxRetries,
+            retryAfter: retryAfter || 'calculated',
+            nextRetryAt: new Date(this.rateLimitTracker.retryAfter).toISOString()
+          });
+
+          if (attempt <= maxRetries) {
+            await this.sleep(backoffTime);
+            continue; // Retry after backoff
+          }
+        }
+
+        // For non-rate-limit errors or max retries reached
+        logger().error(`❌ API call failed after ${attempt} attempts`, {
+          operation,
+          error: error.message || 'Unknown error',
+          isRateLimit: error?.data?.error === 'rate_limited' || error?.status === 429
+        });
+
+        throw error;
+      }
+    }
+
+    throw new Error(`Max retries (${maxRetries}) exceeded for ${operation}`);
+  }
+
+  /**
+   * Helper method to sleep for a specified duration
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Extract rate limit information from API response headers
+   */
+  private extractRateLimitHeaders(response: any): Record<string, any> {
+    const headers = response?.response_metadata?.headers || response?.headers || {};
+    
+    return {
+      rateLimitRemaining: headers['x-ratelimit-remaining'] || headers['X-RateLimit-Remaining'],
+      rateLimitLimit: headers['x-ratelimit-limit'] || headers['X-RateLimit-Limit'],
+      rateLimitReset: headers['x-ratelimit-reset'] || headers['X-RateLimit-Reset'],
+      retryAfter: headers['retry-after'] || headers['Retry-After']
+    };
+  }
+
+  /**
+   * Filter and score messages for relevance based on configured options
+   */
+  private filterThreadMessages(
+    messages: any[], 
+    options: ThreadContextFilterOptions = {}
+  ): FilteredMessage[] {
+    const {
+      maxMessages = 50,
+      timeWindowHours = 24,
+      excludeSystemMessages = true,
+      excludeBotMessages = false,
+      includeReactions = true,
+      relevanceScoring = true,
+      prioritizeRecentMessages = true,
+      prioritizeUserMentions = true
+    } = options;
+
+    // Calculate time window cutoff
+    const timeWindowCutoff = timeWindowHours 
+      ? new Date(Date.now() - (timeWindowHours * 60 * 60 * 1000))
+      : null;
+
+    logger().info('🔍 Filtering thread messages', {
+      totalMessages: messages.length,
+      maxMessages,
+      timeWindowHours,
+      timeWindowCutoff: timeWindowCutoff?.toISOString(),
+      excludeSystemMessages,
+      excludeBotMessages
+    });
+
+    // First pass: Basic filtering and message analysis
+    const filteredMessages: FilteredMessage[] = messages
+      .map((msg, index) => this.analyzeMessage(msg, index, messages.length))
+      .filter((analyzed) => {
+        // Time window filtering
+        if (timeWindowCutoff && analyzed.timestamp < timeWindowCutoff) {
+          return false;
+        }
+
+        // Message type filtering
+        if (excludeSystemMessages && analyzed.messageType === 'system') {
+          return false;
+        }
+
+        if (excludeBotMessages && analyzed.messageType === 'bot') {
+          return false;
+        }
+
+        // Must have text content
+        if (!analyzed.originalMessage.text) {
+          return false;
+        }
+
+        return true;
+      });
+
+    logger().info('📊 After basic filtering', {
+      originalCount: messages.length,
+      filteredCount: filteredMessages.length
+    });
+
+    // Second pass: Relevance scoring (if enabled)
+    if (relevanceScoring) {
+      filteredMessages.forEach(msg => {
+        msg.relevanceScore = this.calculateRelevanceScore(msg, {
+          prioritizeRecentMessages,
+          prioritizeUserMentions,
+          includeReactions
+        });
+      });
+
+      // Sort by relevance score (highest first)
+      filteredMessages.sort((a, b) => b.relevanceScore - a.relevanceScore);
+    }
+
+    // Final pass: Limit to maxMessages
+    const finalMessages = filteredMessages.slice(0, maxMessages);
+
+    logger().info('✅ Message filtering completed', {
+      finalCount: finalMessages.length,
+      averageRelevanceScore: relevanceScoring 
+        ? (finalMessages.reduce((sum, msg) => sum + msg.relevanceScore, 0) / finalMessages.length).toFixed(2)
+        : 'N/A'
+    });
+
+    return finalMessages;
+  }
+
+  /**
+   * Analyze a single message to extract metadata and determine type
+   */
+  private analyzeMessage(msg: any, index: number, totalMessages: number): FilteredMessage {
+    const timestamp = new Date(parseFloat(msg.ts) * 1000);
+    
+    // Determine message type
+    let messageType: 'user' | 'bot' | 'system' = 'user';
+    
+    if (msg.bot_id || msg.username || msg.subtype === 'bot_message') {
+      messageType = 'bot';
+    } else if (msg.subtype && ['channel_join', 'channel_leave', 'channel_topic', 'channel_purpose'].includes(msg.subtype)) {
+      messageType = 'system';
+    }
+
+    // Check for user mentions
+    const hasUserMentions = !!(msg.text && msg.text.includes('<@'));
+
+    // Check for reactions
+    const hasReactions = !!(msg.reactions && msg.reactions.length > 0);
+
+    // Check if this is a thread reply
+    const isThreadReply = !!msg.thread_ts;
+
+    return {
+      originalMessage: msg,
+      relevanceScore: 0, // Will be calculated later if relevance scoring is enabled
+      messageType,
+      timestamp,
+      hasUserMentions,
+      hasReactions,
+      isThreadReply
+    };
+  }
+
+  /**
+   * Calculate relevance score for a message based on various factors
+   */
+  private calculateRelevanceScore(
+    message: FilteredMessage, 
+    scoringOptions: {
+      prioritizeRecentMessages: boolean;
+      prioritizeUserMentions: boolean;
+      includeReactions: boolean;
+    }
+  ): number {
+    let score = 1.0; // Base score
+
+    // Recency scoring (newer messages get higher scores)
+    if (scoringOptions.prioritizeRecentMessages) {
+      const ageInHours = (Date.now() - message.timestamp.getTime()) / (1000 * 60 * 60);
+      const recencyMultiplier = Math.max(0.1, 1 - (ageInHours / 48)); // Decay over 48 hours
+      score *= (1 + recencyMultiplier);
+    }
+
+    // User mention scoring
+    if (scoringOptions.prioritizeUserMentions && message.hasUserMentions) {
+      score *= 1.8; // Significant boost for mentions
+    }
+
+    // Reaction scoring
+    if (scoringOptions.includeReactions && message.hasReactions) {
+      const reactionCount = message.originalMessage.reactions?.length || 0;
+      score *= (1 + Math.min(reactionCount * 0.1, 0.5)); // Up to 50% boost based on reactions
+    }
+
+    // Message length scoring (longer messages might be more informative)
+    const textLength = message.originalMessage.text?.length || 0;
+    if (textLength > 50) {
+      score *= 1.2; // Small boost for substantial messages
+    }
+
+    // Thread reply scoring (often more contextual)
+    if (message.isThreadReply) {
+      score *= 1.1; // Small boost for thread replies
+    }
+
+    // User message preference over bot messages
+    if (message.messageType === 'user') {
+      score *= 1.3; // Prefer user messages over bot messages
+    }
+
+    return Math.round(score * 100) / 100; // Round to 2 decimal places
+  }
+
+  /**
+   * Convert filtered messages back to context strings with enhanced formatting
+   */
+  private formatFilteredMessages(filteredMessages: FilteredMessage[]): string[] {
+    return filteredMessages.map(({ originalMessage, relevanceScore, messageType, hasUserMentions, hasReactions }) => {
+      const userDisplay = originalMessage.user ? `<@${originalMessage.user}>` : 'Unknown User';
+      const timestamp = new Date(parseFloat(originalMessage.ts) * 1000).toISOString();
+      
+      // Add context indicators
+      let indicators = '';
+      if (messageType === 'bot') indicators += '🤖 ';
+      if (hasUserMentions) indicators += '👤 ';
+      if (hasReactions) indicators += '👍 ';
+      
+      // Add relevance score for debugging (can be removed in production)
+      const scoreIndicator = relevanceScore > 0 ? ` [📊${relevanceScore}]` : '';
+      
+      return `[${timestamp}] ${indicators}${userDisplay}: ${originalMessage.text}${scoreIndicator}`;
+    });
+  }
+
+  /**
+   * Enhanced thread context fetching with Slack Web API integration and pagination support
+   */
+  private async getThreadContext(event: any, client: any): Promise<string[]> {
     try {
-      // TODO: Implement actual thread message fetching
-      // This would connect to Slack API to get conversation history
-      return [];
+      const channelId = event.channel;
+      const threadTs = event.thread_ts || event.ts;
+      
+      logger().info('🔍 Fetching thread context from Slack API', {
+        channel: channelId,
+        threadTs: threadTs,
+        isThread: !!event.thread_ts
+      });
+
+      // Try to get from cache first
+      const cachedContext = await this.getCachedThreadContext(channelId, threadTs);
+      if (cachedContext) {
+        logger().info('🚀 Using cached thread context', {
+          messageCount: cachedContext.length,
+          cacheStats: this.getCacheStats()
+        });
+        return cachedContext;
+      }
+      
+      // Configuration for pagination
+      const MAX_MESSAGES = 200; // Prevent excessive API calls
+      const BATCH_SIZE = 100; // Messages per API call
+      
+      let allMessages: any[] = [];
+      let cursor: string | undefined;
+      let totalFetched = 0;
+      let apiCallCount = 0;
+
+      // Paginated fetch loop
+      do {
+        apiCallCount++;
+        logger().info(`📖 Fetching batch ${apiCallCount}`, {
+          cursor: cursor ? `${cursor.substring(0, 8)}...` : 'initial',
+          totalFetched,
+          maxMessages: MAX_MESSAGES
+        });
+
+        // Call conversations.replies API with rate limiting and pagination
+        const response = await this.makeRateLimitedApiCall(
+          () => client.conversations.replies({
+            channel: event.channel,
+            ts: threadTs,
+            inclusive: true, // Include the original message
+            limit: BATCH_SIZE,
+            cursor: cursor // Use cursor for pagination
+          }),
+          `conversations.replies-batch-${apiCallCount}`
+        );
+
+        if (!response.ok) {
+          logger().error('Slack API error:', response.error);
+          break; // Exit pagination loop on error
+        }
+
+        if (!response.messages || response.messages.length === 0) {
+          logger().info('No more messages found, ending pagination');
+          break; // No more messages
+        }
+
+        // Add messages to collection
+        allMessages.push(...response.messages);
+        totalFetched += response.messages.length;
+
+        // Update cursor for next iteration
+        cursor = response.response_metadata?.next_cursor;
+
+        logger().info(`📊 Batch ${apiCallCount} completed`, {
+          batchSize: response.messages.length,
+          totalFetched,
+          hasMore: !!cursor,
+          withinLimit: totalFetched < MAX_MESSAGES
+        });
+
+        // Safety checks to prevent infinite loops
+        if (totalFetched >= MAX_MESSAGES) {
+          logger().warn(`⚠️ Reached message limit (${MAX_MESSAGES}), truncating thread context`);
+          break;
+        }
+
+        if (apiCallCount >= 10) { // Safety limit on API calls
+          logger().warn('⚠️ Reached API call limit (10), truncating thread context');
+          break;
+        }
+
+      } while (cursor); // Continue while there's a cursor
+
+      if (allMessages.length === 0) {
+        logger().warn('No messages found in thread context');
+        return [];
+      }
+
+      // Apply intelligent filtering and relevance scoring
+      const filterOptions: ThreadContextFilterOptions = {
+        maxMessages: 30, // Reduced from showing all messages
+        timeWindowHours: 48, // Focus on last 48 hours
+        excludeSystemMessages: true,
+        excludeBotMessages: false, // Keep bot messages but score them lower
+        includeReactions: true,
+        relevanceScoring: true,
+        prioritizeRecentMessages: true,
+        prioritizeUserMentions: true
+      };
+
+      const filteredMessages = this.filterThreadMessages(allMessages, filterOptions);
+      const contextMessages = this.formatFilteredMessages(filteredMessages);
+
+      logger().info('✅ Thread context retrieved successfully with intelligent filtering', {
+        totalApiCalls: apiCallCount,
+        totalMessages: allMessages.length,
+        filteredMessages: filteredMessages.length,
+        finalContextMessages: contextMessages.length,
+        truncated: totalFetched >= MAX_MESSAGES,
+        averageRelevanceScore: filteredMessages.length > 0 
+          ? (filteredMessages.reduce((sum, msg) => sum + msg.relevanceScore, 0) / filteredMessages.length).toFixed(2)
+          : 'N/A'
+      });
+
+      // Cache the result for future requests
+      await this.cacheThreadContext(channelId, threadTs, contextMessages, 15); // 15 minute TTL
+
+      return contextMessages;
+
     } catch (error) {
-      logger().warn('Failed to fetch thread context:', error);
+      logger().error('Failed to fetch thread context from Slack API:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        channel: event.channel,
+        threadTs: event.thread_ts || event.ts
+      });
+      
+      // Return empty array on error to prevent breaking the bot
       return [];
     }
   }
